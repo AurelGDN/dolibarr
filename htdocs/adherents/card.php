@@ -94,7 +94,7 @@ if ($id > 0)
 	// Define variables to know what current user can do on properties of user linked to edited member
 	if ($object->user_id)
 	{
-		// $ User is the user who edits, $ object->user_id is the id of the related user in the edited member
+		// $User is the user who edits, $object->user_id is the id of the related user in the edited member
 		$caneditfielduser=((($user->id == $object->user_id) && $user->rights->user->self->creer)
 				|| (($user->id != $object->user_id) && $user->rights->user->user->creer));
 		$caneditpassworduser=((($user->id == $object->user_id) && $user->rights->user->self->password)
@@ -268,7 +268,7 @@ if (empty($reshook))
 			$langs->load("errors");
 			setEventMessages($langs->trans("ErrorFieldRequired", $langs->transnoentities("Company")), null, 'errors');
 		}
-		// Test si le login existe deja
+		// Check if the login already exists
 		if (empty($conf->global->ADHERENT_LOGIN_NOT_REQUIRED))
 		{
 			if (empty($login)) {
@@ -970,14 +970,14 @@ else
 
 		// Address
 		print '<tr><td class="tdtop">'.$langs->trans("Address").'</td><td>';
-		print '<textarea name="address" wrap="soft" class="quatrevingtpercent" rows="2">'.(GETPOST('address','alpha')?GETPOST('address','alpha'):$object->address).'</textarea>';
+		print '<textarea name="address" wrap="soft" class="quatrevingtpercent" rows="2">'.(GETPOST('address','alphanohtml')?GETPOST('address','alphanohtml'):$object->address).'</textarea>';
 		print '</td></tr>';
 
 		// Zip / Town
 		print '<tr><td>'.$langs->trans("Zip").' / '.$langs->trans("Town").'</td><td>';
-		print $formcompany->select_ziptown((GETPOST('zipcode','alpha')?GETPOST('zipcode','alpha'):$object->zip),'zipcode',array('town','selectcountry_id','state_id'),6);
+		print $formcompany->select_ziptown((GETPOST('zipcode','alphanohtml')?GETPOST('zipcode','alphanohtml'):$object->zip),'zipcode',array('town','selectcountry_id','state_id'),6);
 		print ' ';
-		print $formcompany->select_ziptown((GETPOST('town','alpha')?GETPOST('town','alpha'):$object->town),'town',array('zipcode','selectcountry_id','state_id'));
+		print $formcompany->select_ziptown((GETPOST('town','alphanohtml')?GETPOST('town','alphanohtml'):$object->town),'town',array('zipcode','selectcountry_id','state_id'));
 		print '</td></tr>';
 
 		// Country

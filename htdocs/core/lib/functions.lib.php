@@ -40,48 +40,6 @@ include_once DOL_DOCUMENT_ROOT .'/core/lib/json.lib.php';
 
 
 /**
- * Function to return value of a static property when class
- * name is dynamically defined (not hard coded).
- * This is because $myclass::$myvar works from PHP 5.3.0+ only
- *
- * @param	string 	$class		Class name
- * @param 	string 	$member		Name of property
- * @return 	mixed				Return value of static property
- * @deprecated Dolibarr now requires 5.3.0+, use $class::$property syntax
- * @see https://php.net/manual/language.oop5.static.php
- */
-function getStaticMember($class, $member)
-{
-	dol_syslog(__FUNCTION__ . " is deprecated", LOG_WARNING);
-
-	// This part is deprecated. Uncomment if for php 5.2.*, and comment next isset class::member
-	/*if (version_compare(phpversion(), '5.3.0', '<'))
-	{
-		if (is_object($class)) $class = get_class($class);
-		$classObj = new ReflectionClass($class);
-		$result = null;
-
-		$found=0;
-		foreach($classObj->getStaticProperties() as $prop => $value)
-		{
-			if ($prop == $member)
-			{
-				$result = $value;
-				$found++;
-				break;
-			}
-		}
-
-		if ($found) return $result;
-	}*/
-
-	if (isset($class::$member)) return $class::$member;
-	dol_print_error('','Try to get a static member "'.$member.'" in class "'.$class.'" that does not exists or is not static.');
-	return null;
-}
-
-
-/**
  * Return a DoliDB instance (database handler).
  *
  * @param   string	$type		Type of database (mysql, pgsql...)
@@ -3015,7 +2973,7 @@ function img_picto($titlealt, $picto, $moreatt = '', $pictoisfullpath = false, $
 		//if (in_array($picto, array('switch_off', 'switch_on', 'off', 'on')))
 		if (empty($srconly) && in_array($pictowithoutext, array(
 				'bank', 'close_title', 'delete', 'edit', 'ellipsis-h', 'filter', 'grip', 'grip_title', 'list', 'listlight', 'off', 'on', 'play', 'playdisabled', 'printer', 'resize',
-				'note','switch_off', 'switch_on', 'unlink', 'uparrow', '1downarrow', '1uparrow',
+				'note', 'split', 'switch_off', 'switch_on', 'unlink', 'uparrow', '1downarrow', '1uparrow',
 				'jabber','skype','twitter','facebook'
 			)
 		)) {
@@ -3060,6 +3018,7 @@ function img_picto($titlealt, $picto, $moreatt = '', $pictoisfullpath = false, $
 			}
 			elseif ($pictowithoutext == 'grip_title' || $pictowithoutext == 'grip') {
 				$fakey = 'fa-arrows';
+				if (! empty($conf->global->MAIN_USE_FONT_AWESOME_5)) $fakey = 'fa-arrows-alt';
 			}
 			elseif ($pictowithoutext == 'listlight') {
 				$fakey = 'fa-download';
@@ -3107,16 +3066,22 @@ function img_picto($titlealt, $picto, $moreatt = '', $pictoisfullpath = false, $
 			elseif ($pictowithoutext == 'jabber') {
 				$fakey = 'fa-comment-o';
 			}
+			elseif ($pictowithoutext == 'split') {
+			    $fakey = 'fa-code-fork';
+			}
 			else {
 				$fakey = 'fa-'.$pictowithoutext;
 				$facolor = '#444';
 				$marginleftonlyshort=0;
 			}
 
+            $reg=array();
 			if (preg_match('/class="([^"]+)"/', $moreatt, $reg)) {
 				$morecss.= ($morecss?' ':'').$reg[1];
 			}
-			$enabledisablehtml = '<span class="fa '.$fakey.' '.($marginleftonlyshort?($marginleftonlyshort==1?'marginleftonlyshort':'marginleftonly'):'').' valignmiddle'.($morecss?' '.$morecss:'').'" style="'.($fasize?('font-size: '.$fasize.';'):'').($facolor?(' color: '.$facolor.';'):'').'" alt="'.dol_escape_htmltag($titlealt).'"'.(($notitle || empty($title))?'':' title="'.dol_escape_htmltag($title).'"').($moreatt?' '.$moreatt:'').'>';
+			$fa='fa';
+			if (! empty($conf->global->MAIN_USE_FONT_AWESOME_5)) $fa='fas';
+			$enabledisablehtml = '<span class="'.$fa.' '.$fakey.' '.($marginleftonlyshort?($marginleftonlyshort==1?'marginleftonlyshort':'marginleftonly'):'').' valignmiddle'.($morecss?' '.$morecss:'').'" style="'.($fasize?('font-size: '.$fasize.';'):'').($facolor?(' color: '.$facolor.';'):'').'" alt="'.dol_escape_htmltag($titlealt).'"'.(($notitle || empty($titlealt))?'':' title="'.dol_escape_htmltag($titlealt).'"').($moreatt?' '.$moreatt:'').'>';
 			if (! empty($conf->global->MAIN_OPTIMIZEFORTEXTBROWSER)) {
 				$enabledisablehtml.= $titlealt;
 			}
@@ -3132,11 +3097,11 @@ function img_picto($titlealt, $picto, $moreatt = '', $pictoisfullpath = false, $
 			$path = $conf->global->MAIN_OVERWRITE_THEME_RES.'/theme/'.$conf->global->MAIN_OVERWRITE_THEME_RES;  // To allow an external module to overwrite image resources whatever is activated theme
 		}
 		else if (! empty($conf->modules_parts['theme']) && array_key_exists($theme, $conf->modules_parts['theme'])) {
-			$path = $theme.'/theme/'.$theme;	// If the theme have the same name as the module
+			$path = $theme.'/theme/'.$theme;     // If the theme have the same name as the module
 		}
 
 		// If we ask an image into $url/$mymodule/img (instead of default path)
-		if (preg_match('/^([^@]+)@([^@]+)$/i',$picto,$regs)) {
+		if (preg_match('/^([^@]+)@([^@]+)$/i', $picto, $regs)) {
 			$picto = $regs[1];
 			$path = $regs[2];	// $path is $mymodule
 		}
@@ -5895,38 +5860,41 @@ function getCommonSubstitutionArray($outputlangs, $onlykey=0, $exclude=null, $ob
 		{
 			$substitutionarray['__ID__'] = $object->id;
 			$substitutionarray['__REF__'] = $object->ref;
-			$substitutionarray['__REFCLIENT__'] = (isset($object->ref_client) ? $object->ref_client : (isset($object->ref_customer) ? $object->ref_customer : ''));
-			$substitutionarray['__REFSUPPLIER__'] = (isset($object->ref_supplier) ? $object->ref_supplier : '');
+			$substitutionarray['__REFCLIENT__'] = (isset($object->ref_client) ? $object->ref_client : (isset($object->ref_customer) ? $object->ref_customer : null));
+			$substitutionarray['__REFSUPPLIER__'] = (isset($object->ref_supplier) ? $object->ref_supplier : null);
 
 			// TODO Remove this
 			$msgishtml = 0;
 
 			$birthday = dol_print_date($object->birth,'day');
 
-			$substitutionarray['__MEMBER_ID__']=$object->id;
-			if (method_exists($object, 'getCivilityLabel')) $substitutionarray['__MEMBER_CIVILITY__'] = $object->getCivilityLabel();
-			$substitutionarray['__MEMBER_FIRSTNAME__']=$msgishtml?dol_htmlentitiesbr($object->firstname):$object->firstname;
-			$substitutionarray['__MEMBER_LASTNAME__']=$msgishtml?dol_htmlentitiesbr($object->lastname):$object->lastname;
-			if (method_exists($object, 'getFullName')) $substitutionarray['__MEMBER_FULLNAME__']=$msgishtml?dol_htmlentitiesbr($object->getFullName($outputlangs)):$object->getFullName($outputlangs);
-			$substitutionarray['__MEMBER_COMPANY__']=$msgishtml?dol_htmlentitiesbr($object->societe):$object->societe;
-			$substitutionarray['__MEMBER_ADDRESS__']=$msgishtml?dol_htmlentitiesbr($object->address):$object->address;
-			$substitutionarray['__MEMBER_ZIP__']=$msgishtml?dol_htmlentitiesbr($object->zip):$object->zip;
-			$substitutionarray['__MEMBER_TOWN__']=$msgishtml?dol_htmlentitiesbr($object->town):$object->town;
-			$substitutionarray['__MEMBER_COUNTRY__']=$msgishtml?dol_htmlentitiesbr($object->country):$object->country;
-			$substitutionarray['__MEMBER_EMAIL__']=$msgishtml?dol_htmlentitiesbr($object->email):$object->email;
-			$substitutionarray['__MEMBER_BIRTH__']=$msgishtml?dol_htmlentitiesbr($birthday):$birthday;
-			$substitutionarray['__MEMBER_PHOTO__']=$msgishtml?dol_htmlentitiesbr($object->photo):$object->photo;
-			$substitutionarray['__MEMBER_LOGIN__']=$msgishtml?dol_htmlentitiesbr($object->login):$object->login;
-			$substitutionarray['__MEMBER_PASSWORD__']=$msgishtml?dol_htmlentitiesbr($object->pass):$object->pass;
-			$substitutionarray['__MEMBER_PHONE__']=$msgishtml?dol_htmlentitiesbr($object->phone):$object->phone;
-			$substitutionarray['__MEMBER_PHONEPRO__']=$msgishtml?dol_htmlentitiesbr($object->phone_perso):$object->phone_perso;
-			$substitutionarray['__MEMBER_PHONEMOBILE__']=$msgishtml?dol_htmlentitiesbr($object->phone_mobile):$object->phone_mobile;
-			$substitutionarray['__MEMBER_FIRST_SUBSCRIPTION_DATE__']       = dol_print_date($object->first_subscription_date, 'dayrfc');
-			$substitutionarray['__MEMBER_FIRST_SUBSCRIPTION_DATE_START__'] = dol_print_date($object->first_subscription_date_start, 'dayrfc');
-			$substitutionarray['__MEMBER_FIRST_SUBSCRIPTION_DATE_END__']   = dol_print_date($object->first_subscription_date_end, 'dayrfc');
-			$substitutionarray['__MEMBER_LAST_SUBSCRIPTION_DATE__']        = dol_print_date($object->last_subscription_date, 'dayrfc');
-			$substitutionarray['__MEMBER_LAST_SUBSCRIPTION_DATE_START__']  = dol_print_date($object->last_subscription_date_start, 'dayrfc');
-			$substitutionarray['__MEMBER_LAST_SUBSCRIPTION_DATE_END__']    = dol_print_date($object->last_subscription_date_end, 'dayrfc');
+			if ($object->id > 0)
+			{
+				$substitutionarray['__MEMBER_ID__']=$object->id;
+				if (method_exists($object, 'getCivilityLabel')) $substitutionarray['__MEMBER_CIVILITY__'] = $object->getCivilityLabel();
+				$substitutionarray['__MEMBER_FIRSTNAME__']=$msgishtml?dol_htmlentitiesbr($object->firstname):$object->firstname;
+				$substitutionarray['__MEMBER_LASTNAME__']=$msgishtml?dol_htmlentitiesbr($object->lastname):$object->lastname;
+				if (method_exists($object, 'getFullName')) $substitutionarray['__MEMBER_FULLNAME__']=$msgishtml?dol_htmlentitiesbr($object->getFullName($outputlangs)):$object->getFullName($outputlangs);
+				$substitutionarray['__MEMBER_COMPANY__']=$msgishtml?dol_htmlentitiesbr($object->societe):$object->societe;
+				$substitutionarray['__MEMBER_ADDRESS__']=$msgishtml?dol_htmlentitiesbr($object->address):$object->address;
+				$substitutionarray['__MEMBER_ZIP__']=$msgishtml?dol_htmlentitiesbr($object->zip):$object->zip;
+				$substitutionarray['__MEMBER_TOWN__']=$msgishtml?dol_htmlentitiesbr($object->town):$object->town;
+				$substitutionarray['__MEMBER_COUNTRY__']=$msgishtml?dol_htmlentitiesbr($object->country):$object->country;
+				$substitutionarray['__MEMBER_EMAIL__']=$msgishtml?dol_htmlentitiesbr($object->email):$object->email;
+				$substitutionarray['__MEMBER_BIRTH__']=$msgishtml?dol_htmlentitiesbr($birthday):$birthday;
+				$substitutionarray['__MEMBER_PHOTO__']=$msgishtml?dol_htmlentitiesbr($object->photo):$object->photo;
+				$substitutionarray['__MEMBER_LOGIN__']=$msgishtml?dol_htmlentitiesbr($object->login):$object->login;
+				$substitutionarray['__MEMBER_PASSWORD__']=$msgishtml?dol_htmlentitiesbr($object->pass):$object->pass;
+				$substitutionarray['__MEMBER_PHONE__']=$msgishtml?dol_htmlentitiesbr($object->phone):$object->phone;
+				$substitutionarray['__MEMBER_PHONEPRO__']=$msgishtml?dol_htmlentitiesbr($object->phone_perso):$object->phone_perso;
+				$substitutionarray['__MEMBER_PHONEMOBILE__']=$msgishtml?dol_htmlentitiesbr($object->phone_mobile):$object->phone_mobile;
+				$substitutionarray['__MEMBER_FIRST_SUBSCRIPTION_DATE__']       = dol_print_date($object->first_subscription_date, 'dayrfc');
+				$substitutionarray['__MEMBER_FIRST_SUBSCRIPTION_DATE_START__'] = dol_print_date($object->first_subscription_date_start, 'dayrfc');
+				$substitutionarray['__MEMBER_FIRST_SUBSCRIPTION_DATE_END__']   = dol_print_date($object->first_subscription_date_end, 'dayrfc');
+				$substitutionarray['__MEMBER_LAST_SUBSCRIPTION_DATE__']        = dol_print_date($object->last_subscription_date, 'dayrfc');
+				$substitutionarray['__MEMBER_LAST_SUBSCRIPTION_DATE_START__']  = dol_print_date($object->last_subscription_date_start, 'dayrfc');
+				$substitutionarray['__MEMBER_LAST_SUBSCRIPTION_DATE_END__']    = dol_print_date($object->last_subscription_date_end, 'dayrfc');
+			}
 
 			if (is_object($object) && $object->element == 'societe')
 			{
@@ -5958,17 +5926,20 @@ function getCommonSubstitutionArray($outputlangs, $onlykey=0, $exclude=null, $ob
 
 			if (is_object($object) && $object->element == 'contrat' && is_array($object->lines))
 			{
-				$dateplannedstart='';
-				$datenextexpiration='';
-				foreach($object->lines as $line)
+				if ($object->id > 0)
 				{
-					if ($line->date_ouverture_prevue > $dateplannedstart) $dateplannedstart = $line->date_ouverture_prevue;
-					if ($line->statut == 4 && $line->date_fin_prevue && (! $datenextexpiration || $line->date_fin_prevue < $datenextexpiration)) $datenextexpiration = $line->date_fin_prevue;
+					$dateplannedstart='';
+					$datenextexpiration='';
+					foreach($object->lines as $line)
+					{
+						if ($line->date_ouverture_prevue > $dateplannedstart) $dateplannedstart = $line->date_ouverture_prevue;
+						if ($line->statut == 4 && $line->date_fin_prevue && (! $datenextexpiration || $line->date_fin_prevue < $datenextexpiration)) $datenextexpiration = $line->date_fin_prevue;
+					}
+					$substitutionarray['__CONTRACT_HIGHEST_PLANNED_START_DATE__'] = dol_print_date($dateplannedstart, 'dayrfc');
+					$substitutionarray['__CONTRACT_HIGHEST_PLANNED_START_DATETIME__'] = dol_print_date($dateplannedstart, 'standard');
+					$substitutionarray['__CONTRACT_LOWEST_EXPIRATION_DATE__'] = dol_print_date($datenextexpiration, 'dayrfc');
+					$substitutionarray['__CONTRACT_LOWEST_EXPIRATION_DATETIME__'] = dol_print_date($datenextexpiration, 'standard');
 				}
-				$substitutionarray['__CONTRACT_HIGHEST_PLANNED_START_DATE__'] = dol_print_date($dateplannedstart, 'dayrfc');
-				$substitutionarray['__CONTRACT_HIGHEST_PLANNED_START_DATETIME__'] = dol_print_date($dateplannedstart, 'standard');
-				$substitutionarray['__CONTRACT_LOWEST_EXPIRATION_DATE__'] = dol_print_date($datenextexpiration, 'dayrfc');
-				$substitutionarray['__CONTRACT_LOWEST_EXPIRATION_DATETIME__'] = dol_print_date($datenextexpiration, 'standard');
 			}
 
 			// Create dynamic tags for __EXTRAFIELD_FIELD__
@@ -6007,30 +5978,33 @@ function getCommonSubstitutionArray($outputlangs, $onlykey=0, $exclude=null, $ob
 				$paymenturl=$url;
 			}
 
-			$substitutionarray['__ONLINE_PAYMENT_TEXT_AND_URL__']=($paymenturl?str_replace('\n', "\n", $outputlangs->trans("PredefinedMailContentLink", $paymenturl)):'');
-			$substitutionarray['__ONLINE_PAYMENT_URL__']=$paymenturl;
+			if ($object->id > 0)
+			{
+				$substitutionarray['__ONLINE_PAYMENT_TEXT_AND_URL__']=($paymenturl?str_replace('\n', "\n", $outputlangs->trans("PredefinedMailContentLink", $paymenturl)):'');
+				$substitutionarray['__ONLINE_PAYMENT_URL__']=$paymenturl;
 
-			if (! empty($conf->global->PROPOSAL_ALLOW_EXTERNAL_DOWNLOAD) && is_object($object) && $object->element == 'propal')
-			{
-				$substitutionarray['__DIRECTDOWNLOAD_URL_PROPOSAL__'] = $object->getLastMainDocLink($object->element);
+				if (! empty($conf->global->PROPOSAL_ALLOW_EXTERNAL_DOWNLOAD) && is_object($object) && $object->element == 'propal')
+				{
+					$substitutionarray['__DIRECTDOWNLOAD_URL_PROPOSAL__'] = $object->getLastMainDocLink($object->element);
+				}
+				else $substitutionarray['__DIRECTDOWNLOAD_URL_PROPOSAL__'] = '';
+				if (! empty($conf->global->ORDER_ALLOW_EXTERNAL_DOWNLOAD) && is_object($object) && $object->element == 'commande')
+				{
+					$substitutionarray['__DIRECTDOWNLOAD_URL_ORDER__'] = $object->getLastMainDocLink($object->element);
+				}
+				else $substitutionarray['__DIRECTDOWNLOAD_URL_ORDER__'] = '';
+				if (! empty($conf->global->INVOICE_ALLOW_EXTERNAL_DOWNLOAD) && is_object($object) && $object->element == 'facture')
+				{
+					$substitutionarray['__DIRECTDOWNLOAD_URL_INVOICE__'] = $object->getLastMainDocLink($object->element);
+				}
+				else $substitutionarray['__DIRECTDOWNLOAD_URL_INVOICE__'] = '';
 			}
-			else $substitutionarray['__DIRECTDOWNLOAD_URL_PROPOSAL__'] = '';
-			if (! empty($conf->global->ORDER_ALLOW_EXTERNAL_DOWNLOAD) && is_object($object) && $object->element == 'commande')
-			{
-				$substitutionarray['__DIRECTDOWNLOAD_URL_ORDER__'] = $object->getLastMainDocLink($object->element);
-			}
-			else $substitutionarray['__DIRECTDOWNLOAD_URL_ORDER__'] = '';
-			if (! empty($conf->global->INVOICE_ALLOW_EXTERNAL_DOWNLOAD) && is_object($object) && $object->element == 'facture')
-			{
-				$substitutionarray['__DIRECTDOWNLOAD_URL_INVOICE__'] = $object->getLastMainDocLink($object->element);
-			}
-			else $substitutionarray['__DIRECTDOWNLOAD_URL_INVOICE__'] = '';
 		}
 	}
 	if (empty($exclude) || ! in_array('objectamount', $exclude))
 	{
-		$substitutionarray['__DATE_YMD__']        = is_object($object)?(isset($object->date) ? dol_print_date($object->date, 'day', 0, $outputlangs) : '') : '';
-		$substitutionarray['__DATE_DUE_YMD__']    = is_object($object)?(isset($object->date_lim_reglement)? dol_print_date($object->date_lim_reglement, 'day', 0, $outputlangs) : '') : '';
+		$substitutionarray['__DATE_YMD__']        = is_object($object)?(isset($object->date) ? dol_print_date($object->date, 'day', 0, $outputlangs) : null) : '';
+		$substitutionarray['__DATE_DUE_YMD__']    = is_object($object)?(isset($object->date_lim_reglement) ? dol_print_date($object->date_lim_reglement, 'day', 0, $outputlangs) : null) : '';
 
 		$substitutionarray['__AMOUNT__']          = is_object($object)?$object->total_ttc:'';
 		$substitutionarray['__AMOUNT_EXCL_TAX__'] = is_object($object)?$object->total_ht:'';
@@ -6038,11 +6012,11 @@ function getCommonSubstitutionArray($outputlangs, $onlykey=0, $exclude=null, $ob
 		if ($onlykey != 2 || $mysoc->useLocalTax(1)) $substitutionarray['__AMOUNT_TAX2__']     = is_object($object)?$object->total_localtax1:'';
 		if ($onlykey != 2 || $mysoc->useLocalTax(2)) $substitutionarray['__AMOUNT_TAX3__']     = is_object($object)?$object->total_localtax2:'';
 
-		$substitutionarray['__AMOUNT_FORMATED__']          = is_object($object)?price($object->total_ttc, 0, $outputlangs, 0, 0, -1, $conf->currency):'';
-		$substitutionarray['__AMOUNT_EXCL_TAX_FORMATED__'] = is_object($object)?price($object->total_ht, 0, $outputlangs, 0, 0, -1, $conf->currency):'';
-		$substitutionarray['__AMOUNT_VAT_FORMATED__']      = is_object($object)?($object->total_vat?price($object->total_vat, 0, $outputlangs, 0, 0, -1, $conf->currency):price($object->total_tva, 0, $outputlangs, 0, 0, -1, $conf->currency)):'';
-		if ($onlykey != 2 || $mysoc->useLocalTax(1)) $substitutionarray['__AMOUNT_TAX2_FORMATED__']     = is_object($object)?price($object->total_localtax1, 0, $outputlangs, 0, 0, -1, $conf->currency):'';
-		if ($onlykey != 2 || $mysoc->useLocalTax(2)) $substitutionarray['__AMOUNT_TAX3_FORMATED__']     = is_object($object)?price($object->total_localtax2, 0, $outputlangs, 0, 0, -1, $conf->currency):'';
+		$substitutionarray['__AMOUNT_FORMATED__']          = is_object($object)?($object->total_ttc ? price($object->total_ttc, 0, $outputlangs, 0, 0, -1, $conf->currency) : null):'';
+		$substitutionarray['__AMOUNT_EXCL_TAX_FORMATED__'] = is_object($object)?($object->total_ht ? price($object->total_ht, 0, $outputlangs, 0, 0, -1, $conf->currency) : null):'';
+		$substitutionarray['__AMOUNT_VAT_FORMATED__']      = is_object($object)?($object->total_vat ? price($object->total_vat, 0, $outputlangs, 0, 0, -1, $conf->currency): ($object->total_tva ? price($object->total_tva, 0, $outputlangs, 0, 0, -1, $conf->currency) : null)):'';
+		if ($onlykey != 2 || $mysoc->useLocalTax(1)) $substitutionarray['__AMOUNT_TAX2_FORMATED__']     = is_object($object)? ($object->total_localtax1 ? price($object->total_localtax1, 0, $outputlangs, 0, 0, -1, $conf->currency) : null):'';
+		if ($onlykey != 2 || $mysoc->useLocalTax(2)) $substitutionarray['__AMOUNT_TAX3_FORMATED__']     = is_object($object)? ($object->total_localtax2 ? price($object->total_localtax2, 0, $outputlangs, 0, 0, -1, $conf->currency) : null):'';
 
 		// TODO Add keys for foreign multicurrency
 
@@ -6153,10 +6127,12 @@ function make_substitutions($text, $substitutionarray, $outputlangs=null)
 	// Make substitition for array $substitutionarray
 	foreach ($substitutionarray as $key => $value)
 	{
+		if (! isset($value)) continue;	// If value is null, it same than not having substitution key at all into array, we do not replace.
+
 		if ($key == '__SIGNATURE__' && (! empty($conf->global->MAIN_MAIL_DO_NOT_USE_SIGN))) $value='';		// Protection
 		if ($key == '__USER_SIGNATURE__' && (! empty($conf->global->MAIN_MAIL_DO_NOT_USE_SIGN))) $value='';	// Protection
 
-		$text=str_replace("$key","$value",$text);	// We must keep the " to work when value is 123.5 for example
+		$text=str_replace("$key", "$value", $text);	// We must keep the " to work when value is 123.5 for example
 	}
 
 	return $text;
@@ -6274,7 +6250,7 @@ function get_date_range($date_start,$date_end,$format = '',$outputlangs='', $wit
  *
  * @param	string	$firstname		Firstname
  * @param	string	$lastname		Lastname
- * @param	int		$nameorder		-1=Auto, 0=Lastname+Firstname, 1=Firstname+Lastname, 2=Firstname
+ * @param	int		$nameorder		-1=Auto, 0=Lastname+Firstname, 1=Firstname+Lastname, 2=Firstname, 3=Firstname if defined else lastname
  * @return	string					Firstname + lastname or Lastname + firstname
  */
 function dolGetFirstLastname($firstname,$lastname,$nameorder=-1)
@@ -6284,15 +6260,19 @@ function dolGetFirstLastname($firstname,$lastname,$nameorder=-1)
 	$ret='';
 	// If order not defined, we use the setup
 	if ($nameorder < 0) $nameorder=(empty($conf->global->MAIN_FIRSTNAME_NAME_POSITION)?1:0);
-	if ($nameorder && ((string) $nameorder != '2'))
+	if ($nameorder && $nameorder != 2 && $nameorder != 3)
 	{
 		$ret.=$firstname;
 		if ($firstname && $lastname) $ret.=' ';
 		$ret.=$lastname;
 	}
-	else if ($nameorder == 2)
+	else if ($nameorder == 2 || $nameorder == 3)
 	{
 	   $ret.=$firstname;
+	   if (empty($ret) && $nameorder == 3)
+	   {
+	   		$ret.=$lastname;
+	   }
 	}
 	else
 	{

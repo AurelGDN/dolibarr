@@ -366,31 +366,34 @@ if ((! empty($conf->global->MAIN_VERSION_LAST_UPGRADE) && ($conf->global->MAIN_V
 // Creation of a token against CSRF vulnerabilities
 if (! defined('NOTOKENRENEWAL'))
 {
-	// roulement des jetons car cree a chaque appel
+	// Rolling token at each call ($_SESSION['token'] contains token of previous page)
 	if (isset($_SESSION['newtoken'])) $_SESSION['token'] = $_SESSION['newtoken'];
 
 	// Save in $_SESSION['newtoken'] what will be next token. Into forms, we will add param token = $_SESSION['newtoken']
 	$token = dol_hash(uniqid(mt_rand(), true)); // Generates a hash of a random number
 	$_SESSION['newtoken'] = $token;
 }
+// Check token
 if ((! defined('NOCSRFCHECK') && empty($dolibarr_nocsrfcheck) && ! empty($conf->global->MAIN_SECURITY_CSRF_WITH_TOKEN))
 	|| defined('CSRFCHECK_WITH_TOKEN'))	// Check validity of token, only if option MAIN_SECURITY_CSRF_WITH_TOKEN enabled or if constant CSRFCHECK_WITH_TOKEN is set
 {
-	if ($_SERVER['REQUEST_METHOD'] == 'POST' && ! GETPOST('token','alpha')) // Note, offender can still send request by GET
+	if ($_SERVER['REQUEST_METHOD'] == 'POST' && ! GETPOSTISSET('token')) // Note, offender can still send request by GET
 	{
 		print "Access refused by CSRF protection in main.inc.php. Token not provided.\n";
 		print "If you access your server behind a proxy using url rewriting, you might check that all HTTP header is propagated (or add the line \$dolibarr_nocsrfcheck=1 into your conf.php file).\n";
 		die;
 	}
-	if ($_SERVER['REQUEST_METHOD'] === 'POST')  // This test must be after loading $_SESSION['token'].
+
+	//if ($_SERVER['REQUEST_METHOD'] === 'POST')  // This test must be after loading $_SESSION['token'].
+	//{
+	if (GETPOSTISSET('token') && GETPOST('token', 'alpha') != $_SESSION['token'])
 	{
-		if (GETPOST('token', 'alpha') != $_SESSION['token'])
-		{
-			dol_syslog("Invalid token in ".$_SERVER['HTTP_REFERER'].", action=".GETPOST('action','aZ09').", _POST['token']=".GETPOST('token','alpha').", _SESSION['token']=".$_SESSION['token'], LOG_WARNING);
-			//print 'Unset POST by CSRF protection in main.inc.php.';	// Do not output anything because this create problems when using the BACK button on browsers.
-			unset($_POST);
-		}
+		dol_syslog("Invalid token, so we disable POST and some GET parameters - referer=".$_SERVER['HTTP_REFERER'].", action=".GETPOST('action','aZ09').", _GET|POST['token']=".GETPOST('token','alpha').", _SESSION['token']=".$_SESSION['token'], LOG_WARNING);
+		//print 'Unset POST by CSRF protection in main.inc.php.';	// Do not output anything because this create problems when using the BACK button on browsers.
+		unset($_POST);
+		unset($_GET['confirm']);
 	}
+	//}
 }
 
 // Disable modules (this must be after session_start and after conf has been loaded)
@@ -913,7 +916,7 @@ if ((! empty($conf->browser->layout) && $conf->browser->layout == 'phone')
 // If we force to use jmobile, then we reenable javascript
 if (! empty($conf->dol_use_jmobile)) $conf->use_javascript_ajax=1;
 // Replace themes bugged with jmobile with eldy
-if (! empty($conf->dol_use_jmobile) && in_array($conf->theme,array('bureau2crea','cameleo','amarok')))
+if (! empty($conf->dol_use_jmobile) && in_array($conf->theme, array('bureau2crea','cameleo','amarok')))
 {
 	$conf->theme='eldy';
 	$conf->css  =  "/theme/".$conf->theme."/style.css.php";
@@ -1246,8 +1249,8 @@ function top_htmlhead($head, $title='', $disablejs=0, $disablehead=0, $arrayofjs
 			print '<!-- Includes CSS for JQuery (Ajax library) -->'."\n";
 			$jquerytheme = 'base';
 			if (!empty($conf->global->MAIN_USE_JQUERY_THEME)) $jquerytheme = $conf->global->MAIN_USE_JQUERY_THEME;
-			if (constant('JS_JQUERY_UI')) print '<link rel="stylesheet" type="text/css" href="'.JS_JQUERY_UI.'css/'.$jquerytheme.'/jquery-ui.min.css'.($ext?'?'.$ext:'').'">'."\n";  // JQuery
-			else print '<link rel="stylesheet" type="text/css" href="'.DOL_URL_ROOT.'/includes/jquery/css/'.$jquerytheme.'/jquery-ui.css'.($ext?'?'.$ext:'').'">'."\n";    // JQuery
+			if (constant('JS_JQUERY_UI')) print '<link rel="stylesheet" type="text/css" href="'.JS_JQUERY_UI.'css/'.$jquerytheme.'/jquery-ui.min.css'.($ext?'?'.$ext:'').'">'."\n";  // Forced JQuery
+			else print '<link rel="stylesheet" type="text/css" href="'.DOL_URL_ROOT.'/includes/jquery/css/'.$jquerytheme.'/jquery-ui.css'.($ext?'?'.$ext:'').'">'."\n";              // JQuery
 			if (! defined('DISABLE_JQUERY_JNOTIFY')) print '<link rel="stylesheet" type="text/css" href="'.DOL_URL_ROOT.'/includes/jquery/plugins/jnotify/jquery.jnotify-alt.min.css'.($ext?'?'.$ext:'').'">'."\n";          // JNotify
 			if (! defined('DISABLE_SELECT2') && (! empty($conf->global->MAIN_USE_JQUERY_MULTISELECT) || defined('REQUIRE_JQUERY_MULTISELECT')))     // jQuery plugin "mutiselect", "multiple-select", "select2"...
 			{
@@ -1260,6 +1263,11 @@ function top_htmlhead($head, $title='', $disablejs=0, $disablehead=0, $arrayofjs
 		{
 			print '<!-- Includes CSS for font awesome -->'."\n";
 			print '<link rel="stylesheet" type="text/css" href="'.DOL_URL_ROOT.'/theme/common/fontawesome/css/font-awesome.min.css'.($ext?'?'.$ext:'').'">'."\n";
+			if (! empty($conf->global->MAIN_USE_FONT_AWESOME_5))
+			{
+                print '<link rel="stylesheet" type="text/css" href="'.DOL_URL_ROOT.'/theme/common/fontawesome-5/css/all.min.css'.($ext?'?'.$ext:'').'">'."\n";
+                print '<link rel="stylesheet" type="text/css" href="'.DOL_URL_ROOT.'/theme/common/fontawesome-5/css/v4-shims.min.css'.($ext?'?'.$ext:'').'">'."\n";
+			}
 		}
 
 		print '<!-- Includes CSS for Dolibarr theme -->'."\n";
@@ -1740,7 +1748,7 @@ function left_menu($menu_array_before, $helppagename='', $notused='', $menu_arra
 		if (! empty($conf->global->MAIN_OPTIMIZEFORTEXTBROWSER) || empty($conf->use_javascript_ajax))
 		{
 			$urltosearch=DOL_URL_ROOT.'/core/search_page.php?showtitlebefore=1';
-			$searchform='<div class="blockvmenuimpair blockvmenusearchphone"><div id="divsearchforms1"><a href="'.$urltosearch.'" alt="'.dol_escape_htmltag($langs->trans("ShowSearchFields")).'">'.$langs->trans("Search").'...</a></div></div>';
+			$searchform='<div class="blockvmenuimpair blockvmenusearchphone"><div id="divsearchforms1"><a href="'.$urltosearch.'" accesskey="s" alt="'.dol_escape_htmltag($langs->trans("ShowSearchFields")).'">'.$langs->trans("Search").'...</a></div></div>';
 		}
 		elseif ($conf->use_javascript_ajax && ! empty($conf->global->MAIN_USE_OLD_SEARCH_FORM))
 		{
@@ -1935,9 +1943,10 @@ function getHelpParamFor($helppagename,$langs)
  *  @param  string  $prefhtmlinputname  Complement for id to avoid multiple same id in the page
  *  @param	string	$img				Image to use
  *  @param	string	$showtitlebefore	Show title before input text instead of into placeholder. This can be set when output is dedicated for text browsers.
+ *  @param	string	$autofocus			Set autofocus on field
  *  @return	string
  */
-function printSearchForm($urlaction, $urlobject, $title, $htmlmorecss, $htmlinputname, $accesskey='', $prefhtmlinputname='',$img='', $showtitlebefore=0)
+function printSearchForm($urlaction, $urlobject, $title, $htmlmorecss, $htmlinputname, $accesskey='', $prefhtmlinputname='',$img='', $showtitlebefore=0, $autofocus=0)
 {
 	global $conf,$langs,$user;
 
@@ -1951,6 +1960,7 @@ function printSearchForm($urlaction, $urlobject, $title, $htmlmorecss, $htmlinpu
 	$ret.=' style="text-indent: 22px; background-image: url(\''.$img.'\'); background-repeat: no-repeat; background-position: 3px;"';
 	$ret.=($accesskey?' accesskey="'.$accesskey.'"':'');
 	$ret.=' placeholder="'.strip_tags($title).'"';
+	$ret.=($autofocus?' autofocus':'');
 	$ret.=' name="'.$htmlinputname.'" id="'.$prefhtmlinputname.$htmlinputname.'" />';
 	//$ret.='<input type="submit" class="button" style="padding-top: 4px; padding-bottom: 4px; padding-left: 6px; padding-right: 6px" value="'.$langs->trans("Go").'">';
 	$ret.='<button type="submit" class="button" style="padding-top: 4px; padding-bottom: 4px; padding-left: 6px; padding-right: 6px">';

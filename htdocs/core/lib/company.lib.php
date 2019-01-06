@@ -1330,16 +1330,18 @@ function show_actions_done($conf, $langs, $db, $filterobj, $objcon='', $noprint=
         $sql.= " a.fk_user_author, a.fk_contact,";
         $sql.= " c.code as acode, c.libelle as alabel, c.picto as apicto,";
         $sql.= " u.rowid as user_id, u.login as user_login, u.photo as user_photo, u.firstname as user_firstname, u.lastname as user_lastname";
-        if (is_object($filterobj) && get_class($filterobj) == 'Societe')  $sql.= ", sp.lastname, sp.firstname";
+        if (is_object($filterobj) && get_class($filterobj) == 'Societe')      $sql.= ", sp.lastname, sp.firstname";
         elseif (is_object($filterobj) && get_class($filterobj) == 'Adherent') $sql.= ", m.lastname, m.firstname";
-        elseif (is_object($filterobj) && get_class($filterobj) == 'Facture') $sql.= ", o.ref";
-        else $sql.= ", o.ref";
+        elseif (is_object($filterobj) && get_class($filterobj) == 'CommandeFournisseur')  $sql.= ", o.ref";
+        elseif (is_object($filterobj) && get_class($filterobj) == 'Product')  $sql.= ", o.ref";
+        elseif (is_object($filterobj) && get_class($filterobj) == 'Ticket')   $sql.= ", o.ref";
         $sql.= " FROM ".MAIN_DB_PREFIX."actioncomm as a";
         $sql.= " LEFT JOIN ".MAIN_DB_PREFIX."user as u on u.rowid = a.fk_user_action";
         $sql.= " LEFT JOIN ".MAIN_DB_PREFIX."c_actioncomm as c ON a.fk_action = c.id";
 
         if (is_object($objcon) && $objcon->id) {
 		    $sql.= " LEFT JOIN ".MAIN_DB_PREFIX."actioncomm_resources as r ON a.id = r.fk_actioncomm";
+		    $sql.= " AND r.element_type = '" . $db->escape($objcon->table_element) . "' AND r.fk_element = " . $objcon->id;
 	    }
 
 	    if (is_object($filterobj) && get_class($filterobj) == 'Societe')  $sql.= " LEFT JOIN ".MAIN_DB_PREFIX."socpeople as sp ON a.fk_contact = sp.rowid";
@@ -1378,13 +1380,6 @@ function show_actions_done($conf, $langs, $db, $filterobj, $objcon='', $noprint=
         	if ($filterobj->id) $sql.= " AND a.fk_element = ".$filterobj->id;
         }
 
-	    // Work with new table actioncomm_resources and multiple contact affectation.
-	    if (is_object($objcon) && $objcon->id)
-	    {
-		    $sql.= " AND r.element_type = '" . $objcon->table_element . "'" .
-			    " AND r.fk_element = " . $objcon->id;
-	    }
-
         // Condition on actioncode
         if (! empty($actioncode))
         {
@@ -1409,7 +1404,7 @@ function show_actions_done($conf, $langs, $db, $filterobj, $objcon='', $noprint=
         elseif ($donetodo == 'done') $sql.= " AND (a.percent = 100 OR (a.percent = -1 AND a.datep <= '".$db->idate($now)."'))";
         if (is_array($filters) && $filters['search_agenda_label']) $sql.= natural_search('a.label', $filters['search_agenda_label']);
 
-		//TODO Add limit for thirdparty in  contexte very all result
+		//TODO Add limit in nb of results
         $sql.= $db->order($sortfield, $sortorder);
         dol_syslog("company.lib::show_actions_done", LOG_DEBUG);
         $resql=$db->query($sql);
@@ -1634,8 +1629,8 @@ function show_actions_done($conf, $langs, $db, $filterobj, $objcon='', $noprint=
             //$out.=$userstatic->getLoginUrl(1);
             if ($histo[$key]['userid'] > 0)
             {
-            	$userstatic->fetch($histo[$key]['userid']);
-            	$out.=$userstatic->getNomUrl(-1);
+            	$userstatic->fetch($histo[$key]['userid']);	// TODO Introduce a cache on users fetched
+            	$out.=$userstatic->getNomUrl(-1, '', 0, 0, 16, 0, 'firstelselast', '');
             }
             $out.='</td>';
 

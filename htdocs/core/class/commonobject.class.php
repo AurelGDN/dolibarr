@@ -462,7 +462,7 @@ abstract class CommonObject
 	 *
 	 *	@param	Translate	$langs			Language object for translation of civility (used only if option is 1)
 	 *	@param	int			$option			0=No option, 1=Add civility
-	 * 	@param	int			$nameorder		-1=Auto, 0=Lastname+Firstname, 1=Firstname+Lastname, 2=Firstname
+	 * 	@param	int			$nameorder		-1=Auto, 0=Lastname+Firstname, 1=Firstname+Lastname, 2=Firstname, 3=Firstname if defined else lastname
 	 * 	@param	int			$maxlen			Maximum length
 	 * 	@return	string						String with full name
 	 */
@@ -698,10 +698,12 @@ abstract class CommonObject
 			}
 			else return '';
 		}
-
 		// Define $urlwithroot
 		$urlwithouturlroot=preg_replace('/'.preg_quote(DOL_URL_ROOT,'/').'$/i','',trim($dolibarr_main_url_root));
-		$urlwithroot=$urlwithouturlroot.DOL_URL_ROOT;		// This is to use external domain name found into config file
+		// This is to use external domain name found into config file
+		//if (DOL_URL_ROOT && ! preg_match('/\/$/', $urlwithouturlroot) && ! preg_match('/^\//', DOL_URL_ROOT)) $urlwithroot=$urlwithouturlroot.'/'.DOL_URL_ROOT;
+		//else
+		$urlwithroot=$urlwithouturlroot.DOL_URL_ROOT;
 		//$urlwithroot=DOL_MAIN_URL_ROOT;					// This is to use same domain name than current
 
 		$forcedownload=0;
@@ -1777,7 +1779,7 @@ abstract class CommonObject
 			if (get_class($this) == 'Fournisseur') $fieldname = 'mode_reglement_supplier';
 
 			$sql = 'UPDATE '.MAIN_DB_PREFIX.$this->table_element;
-			$sql .= ' SET '.$fieldname.' = '.$id;
+			$sql .= ' SET '.$fieldname.' = '.(($id > 0 || $id == '0') ? $id : 'NULL');
 			$sql .= ' WHERE rowid='.$this->id;
 
 			if ($this->db->query($sql))
@@ -1962,7 +1964,7 @@ abstract class CommonObject
 			if (get_class($this) == 'Fournisseur') $fieldname = 'cond_reglement_supplier';
 
 			$sql = 'UPDATE '.MAIN_DB_PREFIX.$this->table_element;
-			$sql .= ' SET '.$fieldname.' = '.$id;
+			$sql .= ' SET '.$fieldname.' = '.(($id > 0 || $id == '0') ? $id : 'NULL');
 			$sql .= ' WHERE rowid='.$this->id;
 
 			if ($this->db->query($sql))
@@ -4208,7 +4210,7 @@ abstract class CommonObject
 				$line->fetch_product();
 				$productstatic = $line->product;
 			}
-			
+
 			$this->tpl['label'].= $productstatic->getNomUrl(1);
 			$this->tpl['label'].= ' - '.(! empty($line->label)?$line->label:$line->product_label);
 			// Dates
@@ -4225,7 +4227,7 @@ abstract class CommonObject
 			}else {
 				$this->tpl['label'].= ($line->label ? '&nbsp;'.$line->label : '');
 			}
-			
+
 			// Dates
 			if ($line->product_type == 1 && ($date_start || $date_end))
 			{
@@ -4954,6 +4956,7 @@ abstract class CommonObject
 			   		if ($this->array_options[$key] === '') $mandatorypb=true;
 			   		if ($mandatorypb)
 			   		{
+			   			dol_syslog($this->error);
 			   			$this->errors[]=$langs->trans('ErrorFieldRequired', $attributeLabel);
 			   			return -1;
 			   		}
@@ -5037,8 +5040,6 @@ abstract class CommonObject
 						$new_array_options[$key] = price2num($this->array_options[$key]);
 						break;
 					case 'date':
-						$new_array_options[$key] = $this->db->idate($this->array_options[$key]);
-						break;
 					case 'datetime':
 						// If data is a string instead of a timestamp, we convert it
 						if (! is_int($this->array_options[$key])) {
@@ -6292,7 +6293,7 @@ abstract class CommonObject
 			$e = 0;
 			foreach($extrafields->attributes[$this->table_element]['label'] as $key=>$label)
 			{
-				//Show only the key field in params
+				// Show only the key field in params
 				if (is_array($params) && array_key_exists('onlykey',$params) && $key != $params['onlykey']) continue;
 
 				$enabled = 1;
